@@ -1,7 +1,7 @@
 // zimbohCam service worker
 // 1) Uygulamayı çevrimdışı çalıştırır  2) ProRAW motoru (çok iş parçacıklı WebAssembly) için
 //    gereken cross-origin isolation başlıklarını ekler (GitHub Pages bu başlıkları veremiyor).
-const VERSION = 'zimbohcam-1.0.0';
+const VERSION = 'zimbohcam-1.1.0';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/engine.js', 'js/presets.js', 'js/camera.js', 'js/raw.js', 'js/store.js', 'js/jpeg-worker.js',

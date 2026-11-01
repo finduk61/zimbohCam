@@ -70,8 +70,15 @@
   </main>
 
   <section class="presetbar">
+    <button class="drawer-btn" id="drawerBtn" aria-label="Tüm presetler" aria-expanded="false">
+      <svg viewBox="0 0 24 12" width="22" height="11"><path d="M3 10l9-7 9 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <div class="chips" id="chips"></div>
-    <button class="chip add" id="savePresetBtn" aria-label="Preset kaydet">＋ Kaydet</button>
+  </section>
+
+  <section class="drawer" id="drawer" hidden>
+    <div class="panel-head"><h3 class="drawer-title">Presetler</h3><button class="link" id="drawerManage">Yönet</button></div>
+    <div class="drawer-body" id="drawerBody"></div>
   </section>
 
   <section class="controls cam-controls">

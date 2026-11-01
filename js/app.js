@@ -3,13 +3,13 @@ import { FilmEngine } from './engine.js';
 import {
   GROUPS, PARAMS, PARAM_MAP, BUILTIN_PRESETS, neutralParams, normalizeParams,
   loadUserPresets, saveUserPresets, newId, exportPresetsJSON, parseImportedPresets,
-  paramsEqual, toUniforms,
+  paramsEqual, toUniforms, CATEGORIES, HSL_COLORS, loadFavorites, saveFavorites, DEFAULT_FAVORITES,
 } from './presets.js';
 import { Camera, NUMERIC_CAPS, MODE_CAPS } from './camera.js';
 import { isRawFile, decodeRaw, decodeImage, autoGain, rawRegionHalf, imageRegionCanvas } from './raw.js';
 import * as store from './store.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const $ = id => document.getElementById(id);
 const app = $('app'), stage = $('stage'), canvas = $('view'), video = $('video');
 
@@ -35,6 +35,9 @@ let activeId = presets.some(p => p.id === settings.lastPreset) ? settings.lastPr
 let params = settings.lastParams ? normalizeParams(settings.lastParams) : { ...activePreset().params };
 let U = toUniforms(params);
 let panelTab = 'ton';
+let hslSel = 'red';
+let favorites = loadFavorites().filter(id => presets.some(p => p.id === id));
+if (!favorites.length) favorites = [...DEFAULT_FAVORITES];
 
 function activePreset() { return presets.find(p => p.id === activeId) || BUILTIN_PRESETS[0]; }
 
@@ -225,7 +228,7 @@ async function switchLens(l) {
 function updateHud() {
   const h = $('hud');
   if (mode === 'camera' && cam.stream) {
-    const z = cam.hwZoom ? `${cam.hwZoom}x` : cam.digitalZoom > 1 ? `${cam.digitalZoom}x kırp` : '';
+    const z = cam.lens === 'front' ? '' : cam.hwZoom ? `${cam.hwZoom}x` : cam.digitalZoom > 1 ? `${cam.digitalZoom}x kırp` : '';
     const lens = cam.lens === 'front' ? 'ÖN' : cam.lens + 'mm';
     h.textContent = `${lens}  ${video.videoWidth}×${video.videoHeight}${z ? '  ' + z : ''}`;
   } else if (mode === 'edit' && ed) {
@@ -347,7 +350,7 @@ async function openRoll() {
       }).join('')}</div>
       <div class="btnrow">
         <button class="btn primary" id="rSave" ${sel.size ? '' : 'disabled'}>Kaydet (${sel.size})</button>
-        <button class="btn" id="rEdit" ${sel.size === 1 ? '' : 'disabled'}>Düzenle'de aç</button>
+        <button class="btn" id="rEdit" ${sel.size === 1 ? '' : 'disabled'}>Düzenle</button>
         <button class="btn danger" id="rDel" ${sel.size ? '' : 'disabled'}>Sil</button>
       </div>`;
     body.querySelectorAll('.cell').forEach(c => c.onclick = () => { const id = c.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); draw(); });
@@ -614,9 +617,67 @@ function showExportResult(blob, W, H) {
 function renderChips() {
   const el = $('chips');
   const dirty = !paramsEqual(params, activePreset().params);
-  el.innerHTML = presets.map(p => `<button class="chip ${p.id === activeId ? 'on' : ''} ${p.id === activeId && dirty ? 'dirty' : ''}" data-id="${p.id}">${esc(p.name)}</button>`).join('');
+  const list = favorites.map(id => presets.find(p => p.id === id)).filter(Boolean);
+  if (!favorites.includes(activeId)) list.unshift(activePreset());
+  el.innerHTML = list.map(p => `<button class="chip ${p.id === activeId ? 'on' : ''} ${p.id === activeId && dirty ? 'dirty' : ''} ${favorites.includes(p.id) ? '' : 'temp'}" data-id="${p.id}">${esc(p.name)}</button>`).join('');
   el.querySelectorAll('.chip').forEach(b => b.onclick = () => applyPreset(b.dataset.id));
+  if (!$('drawer').hidden) renderDrawer();
 }
+
+// ---------- Preset çekmecesi ----------
+function openDrawer() {
+  if (!$('panel').hidden) closePanel();
+  $('drawer').hidden = false; app.classList.add('drawer-open');
+  $('drawerBtn').classList.add('open'); $('drawerBtn').setAttribute('aria-expanded', 'true');
+  renderDrawer();
+  if (mode === 'edit') scheduleRender();
+}
+function closeDrawer() {
+  $('drawer').hidden = true; app.classList.remove('drawer-open');
+  $('drawerBtn').classList.remove('open'); $('drawerBtn').setAttribute('aria-expanded', 'false');
+  if (mode === 'edit') scheduleRender();
+}
+$('drawerBtn').onclick = () => { $('drawer').hidden ? openDrawer() : closeDrawer(); };
+$('drawerManage').onclick = openPresetManager;
+
+function toggleFav(id) {
+  if (favorites.includes(id)) {
+    if (favorites.length <= 1) { toast('En az bir favori olmalı'); return; }
+    favorites = favorites.filter(x => x !== id);
+  } else favorites.push(id);
+  saveFavorites(favorites);
+  renderChips();
+  renderDrawer();
+}
+
+function renderDrawer() {
+  const body = $('drawerBody');
+  const st = body.scrollTop;
+  const card = p => `<div class="pcard ${p.id === activeId ? 'on' : ''}" data-id="${p.id}" role="button" tabindex="0">
+      <span class="pname">${esc(p.name)}</span>
+      <button class="star ${favorites.includes(p.id) ? 'on' : ''}" data-star="${p.id}" aria-label="Favori">${favorites.includes(p.id) ? '★' : '☆'}</button>
+    </div>`;
+  const favs = favorites.map(id => presets.find(p => p.id === id)).filter(Boolean);
+  const rest = presets.filter(p => !favorites.includes(p.id));
+  const mine = rest.filter(p => !p.builtin);
+  let html = `<div class="pgrid"><button class="pcard add" id="drawerAdd"><span class="pname">＋ Ekle</span></button>${favs.map(card).join('')}</div>`;
+  html = `<div class="section-title">Favoriler <span class="hint">· yıldızlılar şeritte görünür</span></div>` + html;
+  if (mine.length) html += `<div class="section-title">Benim presetlerim</div><div class="pgrid">${mine.map(card).join('')}</div>`;
+  for (const c of CATEGORIES) {
+    const items = rest.filter(p => p.builtin && p.cat === c.id);
+    if (items.length) html += `<div class="section-title">${c.label}</div><div class="pgrid">${items.map(card).join('')}</div>`;
+  }
+  body.innerHTML = html;
+  body.scrollTop = st;
+  $('drawerAdd').onclick = openSavePreset;
+  body.querySelectorAll('.pcard[data-id]').forEach(el => el.onclick = e => {
+    if (e.target.closest('[data-star]')) return;
+    applyPreset(el.dataset.id);
+    closeDrawer();
+  });
+  body.querySelectorAll('[data-star]').forEach(b => b.onclick = e => { e.stopPropagation(); toggleFav(b.dataset.star); });
+}
+
 function applyPreset(id) {
   const p = presets.find(x => x.id === id);
   if (!p) return;
@@ -636,7 +697,7 @@ function onParamsChanged(full) {
   if (full && !$('panel').hidden) renderPanel();
 }
 
-$('savePresetBtn').onclick = () => {
+function openSavePreset() {
   const ap = activePreset();
   const body = openModal('Preset kaydet');
   const suggested = ap.builtin ? ap.name + ' (benim)' : ap.name;
@@ -653,8 +714,9 @@ $('savePresetBtn').onclick = () => {
     const name = inp.value.trim() || 'Preset';
     const p = { id: newId(), name, builtin: false, params: { ...params } };
     presets.push(p); saveUserPresets(presets);
+    favorites.push(p.id); saveFavorites(favorites);
     activeId = p.id; settings.lastPreset = p.id; persist();
-    renderChips(); closeModal(); toast(`"${name}" kaydedildi`);
+    renderChips(); closeModal(); toast(`"${name}" kaydedildi ve favorilere eklendi`);
     requestAnimationFrame(() => { const c = $('chips').querySelector(`[data-id="${p.id}"]`); c && c.scrollIntoView({ inline: 'center', behavior: 'smooth' }); });
   };
   if ($('pOver')) $('pOver').onclick = () => {
@@ -662,7 +724,7 @@ $('savePresetBtn').onclick = () => {
     const nm = inp.value.trim(); if (nm) ap.name = nm;
     saveUserPresets(presets); renderChips(); closeModal(); toast('Preset güncellendi');
   };
-};
+}
 
 function openPresetManager() {
   const body = openModal('Presetler');
@@ -691,6 +753,9 @@ function openPresetManager() {
       } else if (b.dataset.a === 'del') {
         if (!confirm(`"${p.name}" silinsin mi?`)) return;
         presets = presets.filter(x => x.id !== id); saveUserPresets(presets);
+        favorites = favorites.filter(x => x !== id);
+        if (!favorites.length) favorites = [DEFAULT_FAVORITES[0]];
+        saveFavorites(favorites);
         if (activeId === id) { activeId = BUILTIN_PRESETS[0].id; settings.lastPreset = activeId; persist(); }
         renderChips(); draw();
       }
@@ -720,7 +785,7 @@ $('filePresets').onchange = async e => {
 };
 
 // ---------- Ayar paneli ----------
-function openPanel() { $('panel').hidden = false; app.classList.add('panel-open'); renderPanel(); if (mode === 'edit') scheduleRender(); }
+function openPanel() { if (!$('drawer').hidden) closeDrawer(); $('panel').hidden = false; app.classList.add('panel-open'); renderPanel(); if (mode === 'edit') scheduleRender(); }
 function closePanel() { $('panel').hidden = true; app.classList.remove('panel-open'); if (mode === 'edit') scheduleRender(); }
 $('adjustBtnCam').onclick = openPanel;
 $('adjustBtnEdit').onclick = openPanel;
@@ -738,6 +803,26 @@ function hueTrack(p) {
   return 'linear-gradient(90deg, hsl(0 90% 55%), hsl(60 90% 55%), hsl(120 90% 55%), hsl(180 90% 55%), hsl(240 90% 55%), hsl(300 90% 55%), hsl(360 90% 55%))';
 }
 
+function sliderRow(p, ap) {
+  const v = params[p.key], mod = Math.abs(v - ap[p.key]) > 1e-6;
+  return `<div class="row">
+      <div class="row-top"><label class="${mod ? 'mod' : ''}" id="lb-${p.key}">${p.label}</label><button class="val" data-reset="${p.key}" title="Preset değerine dön">${fmtVal(p, v)}</button></div>
+      <input type="range" data-k="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}" ${p.hue ? `style="--track:${hueTrack(p)}"` : ''}>
+    </div>`;
+}
+function mixerHtml(ap) {
+  const c = HSL_COLORS.find(x => x.id === hslSel) || HSL_COLORS[0];
+  const dots = HSL_COLORS.map(x => {
+    const used = ['h', 's', 'l'].some(k => params[`hsl_${x.id}_${k}`]);
+    return `<button class="hdot ${x.id === c.id ? 'on' : ''} ${used ? 'used' : ''}" data-hsl="${x.id}" style="--c:${x.css}" aria-label="${x.label}"></button>`;
+  }).join('');
+  return `<div class="section-title">Renk karıştırıcı</div>
+    <div class="hdots">${dots}</div>
+    <div class="hname">${c.label}</div>
+    ${['h', 's', 'l'].map(k => sliderRow(PARAM_MAP[`hsl_${c.id}_${k}`], ap)).join('')}
+    <p class="note">Bir renge dokun, sonra o rengin tonunu, doygunluğunu ve parlaklığını değiştir. Ör. yeşili mora kaydırmak Lomochrome Purple görünümü verir.</p>`;
+}
+
 function renderPanel() {
   const tabs = [...GROUPS];
   if (mode === 'camera') tabs.push({ id: 'cam', label: 'Kamera' });
@@ -746,9 +831,11 @@ function renderPanel() {
   $('tabs').querySelectorAll('.tab').forEach(b => b.onclick = () => { panelTab = b.dataset.t; renderPanel(); });
   $('panel').querySelector('.panel-foot').hidden = panelTab === 'cam';
   const body = $('panelBody');
-  if (panelTab === 'cam') { renderCamPanel(body); return; }
+  const keepScroll = body.dataset.tab === panelTab ? body.scrollTop : 0;
+  body.dataset.tab = panelTab;
+  if (panelTab === 'cam') { renderCamPanel(body); body.scrollTop = keepScroll; return; }
   const ap = activePreset().params;
-  const list = PARAMS.filter(p => p.group === panelTab);
+  const list = PARAMS.filter(p => p.group === panelTab && !p.hsl);
   body.innerHTML = list.map(p => {
     const v = params[p.key], mod = Math.abs(v - ap[p.key]) > 1e-6;
     if (p.toggle) return `<div class="toggle-row"><label class="${mod ? 'mod' : ''}" style="font-size:13px;font-weight:600">${p.label}</label><button class="switch ${v ? 'on' : ''}" data-k="${p.key}" role="switch" aria-checked="${!!v}"></button></div>`;
@@ -757,7 +844,10 @@ function renderPanel() {
       <input type="range" data-k="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}" ${p.hue ? `style="--track:${hueTrack(p)}"` : ''}>
     </div>`;
   }).join('') + (panelTab === 'isik' ? `<p class="note">Halation: parlak ışıkların etrafındaki kırmızı ışıma. "Işık eşiği" düştükçe daha az parlak alanlar da ışır.</p>` : '')
-    + (panelTab === 'grain' ? `<p class="note">Grain görüntü boyutuna göre ölçeklenir; ekranda gördüğün, kaydedilen fotoğrafın aynı boyutta görünüşüdür. 1:1 modunda tam çözünürlükte görebilirsin.</p>` : '');
+    + (panelTab === 'grain' ? `<p class="note">Grain görüntü boyutuna göre ölçeklenir; ekranda gördüğün, kaydedilen fotoğrafın aynı boyutta görünüşüdür. 1:1 modunda tam çözünürlükte görebilirsin.</p>` : '')
+    + (panelTab === 'renk' ? mixerHtml(ap) : '');
+  body.scrollTop = keepScroll;
+  body.querySelectorAll('[data-hsl]').forEach(b => b.onclick = () => { hslSel = b.dataset.hsl; renderPanel(); });
   body.querySelectorAll('input[type=range]').forEach(inp => {
     inp.oninput = () => {
       const p = PARAM_MAP[inp.dataset.k];

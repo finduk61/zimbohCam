@@ -124,6 +124,44 @@ uniform float uHalAmt; uniform vec3 uHalColor;
 uniform float uBloomAmt;
 uniform float uLowScale;
 uniform uint uSeed;
+uniform int uHslOn;
+uniform float uHslH[6];
+uniform float uHslS[6];
+uniform float uHslL[6];
+const float HC[6] = float[6](0.0, 30.0, 60.0, 120.0, 220.0, 280.0);
+const float HGN[6] = float[6](30.0, 30.0, 60.0, 100.0, 60.0, 80.0);  // sonraki merkeze uzaklık
+const float HGP[6] = float[6](80.0, 30.0, 30.0, 60.0, 100.0, 60.0);  // önceki merkeze uzaklık
+vec3 rgb2hsv(vec3 c){
+  vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  return vec3(abs(q.z + (q.w - q.y) / (6.0*d + 1e-10)), d / (q.x + 1e-10), q.x);
+}
+vec3 hsv2rgb(vec3 c){
+  vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0/3.0, 1.0/3.0)) * 6.0 - 3.0);
+  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+// Lightroom tarzı renk karıştırıcı (doğrusal ışıkta)
+vec3 applyHsl(vec3 x){
+  float mx = max(max(x.r, x.g), x.b);
+  if (mx <= 1e-6) return x;
+  vec3 hsv = rgb2hsv(x / mx);
+  float h = hsv.x * 360.0;
+  float dh = 0.0, ds = 0.0, dl = 0.0;
+  for (int i = 0; i < 6; i++){
+    float d = mod(h - HC[i] + 540.0, 360.0) - 180.0;
+    float w = d >= 0.0 ? 1.0 - d / HGN[i] : 1.0 + d / HGP[i];
+    w = clamp(w, 0.0, 1.0);
+    w = w * w * (3.0 - 2.0 * w);
+    dh += uHslH[i] * w; ds += uHslS[i] * w; dl += uHslL[i] * w;
+  }
+  float ws = smoothstep(0.02, 0.25, hsv.y);
+  hsv.x = fract((h + dh * ws) / 360.0 + 1.0);
+  hsv.y = clamp(hsv.y * (1.0 + ds * ws), 0.0, 1.0);
+  float lm = max(0.0, 1.0 + dl * 0.7 * ws);
+  return hsv2rgb(hsv) * mx * lm;
+}
 
 uvec3 pcg3(uvec3 v){
   v = v * 1664525u + 1013904223u;
@@ -167,6 +205,7 @@ void main(){
   x += uHalColor * hal * uHalAmt;
   x += blo * uBloomAmt;
 
+  if (uHslOn == 1) x = applyHsl(x);
   float L = dot(x, LUMA);
   if (uMono == 1) x = vec3(dot(x, vec3(0.30, 0.56, 0.14)));
   else x = max(mix(vec3(L), x, uSat), 0.0);
@@ -410,6 +449,12 @@ export class FilmEngine {
       gl.uniform3fv(p.u.uHalColor, u.halColor);
       gl.uniform1f(p.u.uBloomAmt, u.bloomAmt);
       gl.uniform1f(p.u.uLowScale, this.lowScale);
+      gl.uniform1i(p.u.uHslOn, u.hslOn || 0);
+      if (u.hslOn) {
+        gl.uniform1fv(p.u.uHslH, u.hslH);
+        gl.uniform1fv(p.u.uHslS, u.hslS);
+        gl.uniform1fv(p.u.uHslL, u.hslL);
+      }
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }

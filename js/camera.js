@@ -54,6 +54,8 @@ export class Camera {
     // 48mm = ana kamera 2x
     this.digitalZoom = 1; this.hwZoom = null;
     if (lens === '48') await this.setZoom(2);
+    // Ön kamera: Apple Kamera'nın normal (geniş olmayan) kadrajı = sensörün ortadan ~1.3x kırpılmış hali
+    else if (lens === 'front') await this.setZoom(1.3);
     return this.info();
   }
 
