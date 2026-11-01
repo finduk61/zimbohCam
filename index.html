@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="zimbohCam">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>zimbohCam</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app" class="mode-camera">
+
+  <header class="top">
+    <div class="brand">zimboh<b>Cam</b></div>
+    <div class="seg" id="modeSeg">
+      <button data-mode="camera" class="on">Kamera</button>
+      <button data-mode="edit">Düzenle</button>
+    </div>
+    <div class="top-actions">
+      <button id="fxBtn" class="fx on" aria-pressed="true" title="Efektleri aç/kapat"><span class="dot"></span><span id="fxLabel">FX AÇIK</span></button>
+      <button id="settingsBtn" class="icon-btn" aria-label="Ayarlar">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Zm7.43-2.53a7.8 7.8 0 0 0 0-1.94l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.68-.97l-.38-2.65A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.6.25-1.17.57-1.68.97l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65a7.8 7.8 0 0 0 0 1.94l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.22.39.3.61.22l2.49-1c.51.4 1.08.72 1.68.97l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.38-2.65c.6-.25 1.17-.57 1.68-.97l2.49 1c.22.08.48 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="view"></canvas>
+    <video id="video" playsinline muted autoplay></video>
+    <div class="hud" id="hud"></div>
+    <div class="fx-off-badge" id="fxOffBadge">ORİJİNAL</div>
+
+    <div class="placeholder" id="camStart" hidden>
+      <p id="camMsg">Kamera başlatılıyor…</p>
+      <button class="btn primary" id="camStartBtn">Kamerayı başlat</button>
+    </div>
+
+    <div class="placeholder" id="editEmpty" hidden>
+      <h2>Fotoğraf aç</h2>
+      <p>Galerideki fotoğraflarına ya da iPhone'da çektiğin ProRAW (DNG) dosyalarına film görünümü ver.</p>
+      <div class="col">
+        <button class="btn primary" id="openRawBtn">ProRAW / DNG aç</button>
+        <button class="btn" id="openImgBtn">Galeriden fotoğraf aç</button>
+      </div>
+      <details class="tip">
+        <summary>ProRAW dosyası nasıl açılır?</summary>
+        <ol>
+          <li>iPhone Ayarlar → Kamera → Formatlar → <b>ProRAW</b>'ı aç. Format seçeneği varsa <b>JPEG Kayıpsız (En Uyumlu)</b> seç.</li>
+          <li>Kamera uygulamasında RAW simgesi açıkken çek.</li>
+          <li>Fotoğraflar'da fotoğrafı aç → Paylaş → <b>Dosyalar'a Kaydet</b>.</li>
+          <li>Burada <b>ProRAW / DNG aç</b> → <b>Dosyalara Göz At</b> ile dosyayı seç.</li>
+        </ol>
+        <p>Galeriden doğrudan seçersen iPhone dosyayı JPEG'e çevirebilir. Orijinal DNG için Dosyalar yolunu kullan.</p>
+      </details>
+    </div>
+
+    <div class="busy" id="busy" hidden>
+      <div class="spinner"></div>
+      <div id="busyText">İşleniyor…</div>
+      <div class="bar"><i id="busyBar"></i></div>
+    </div>
+    <div class="flash" id="flash"></div>
+  </main>
+
+  <section class="presetbar">
+    <div class="chips" id="chips"></div>
+    <button class="chip add" id="savePresetBtn" aria-label="Preset kaydet">＋ Kaydet</button>
+  </section>
+
+  <section class="controls cam-controls">
+    <div class="lenses" id="lenses"></div>
+    <div class="shutter-row">
+      <button class="thumb" id="rollBtn" aria-label="Film rulosu"><img id="rollThumb" alt=""><span class="badge" id="rollBadge" hidden>0</span></button>
+      <button class="shutter" id="shutter" aria-label="Çek"><span></span></button>
+      <button class="tool" id="adjustBtnCam" aria-label="Ayarlar paneli">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+        <span>Ayar</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="controls edit-controls">
+    <button class="tool" id="openBtn"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 7h6l2 2h10v10H3z"/></svg><span>Aç</span></button>
+    <button class="tool" id="zoomBtn"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="zoomLabel">1:1</span></button>
+    <button class="tool" id="adjustBtnEdit"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Ayar</span></button>
+    <button class="tool accent" id="exportBtn"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg><span>Kaydet</span></button>
+  </section>
+
+  <section class="panel" id="panel" hidden>
+    <div class="panel-head">
+      <div class="tabs" id="tabs"></div>
+      <button class="link" id="panelDone">Tamam</button>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
+    <div class="panel-foot">
+      <button class="link" id="resetPreset">Preset'e dön</button>
+      <button class="link" id="resetNeutral">Hepsini sıfırla</button>
+    </div>
+  </section>
+
+  <!-- Modallar -->
+  <div class="modal" id="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-head"><h3 id="modalTitle"></h3><button class="link" id="modalClose">Kapat</button></div>
+      <div class="sheet-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <input type="file" id="fileImg" accept="image/*" hidden>
+  <input type="file" id="fileRaw" accept=".dng,.DNG,image/x-adobe-dng,image/dng,image/*" hidden>
+  <input type="file" id="filePresets" accept=".json,application/json,text/plain" hidden>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

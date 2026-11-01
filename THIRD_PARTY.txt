@@ -1,0 +1,7 @@
+Üçüncü taraf bileşenler
+
+lib/libraw/  — libraw-wasm 1.6.0 (ISC), https://github.com/ybouane/LibRaw-Wasm
+               LibRaw (LGPL-2.1 / CDDL-1.0), https://www.libraw.org
+               Little CMS (MIT)
+js/jpeg-worker.js — JPEG tabloları ve AAN DCT: Adobe JPEG encoder (BSD-3-Clause),
+               JS portu Andreas Ritter / jpeg-js. Copyright (c) 2008, Adobe Systems Incorporated.
