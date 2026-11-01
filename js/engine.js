@@ -255,6 +255,14 @@ export class FilmEngine {
     const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: false, alpha: false });
     if (!gl) throw new Error('Bu cihaz WebGL2 desteklemiyor.');
     this.gl = gl;
+    this._init();
+  }
+
+  isLost() { return this.gl.isContextLost(); }
+
+  // Grafik bağlamı kaybolup geri geldiğinde tüm GPU kaynaklarını yeniden kur
+  _init() {
+    const gl = this.gl;
     this.floatRT = !!gl.getExtension('EXT_color_buffer_float') || !!gl.getExtension('EXT_color_buffer_half_float');
     this.lowScale = this.floatRT ? 1.0 : 0.125;
     this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);

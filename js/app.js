@@ -9,9 +9,10 @@ import { Camera, NUMERIC_CAPS, MODE_CAPS } from './camera.js';
 import { isRawFile, decodeRaw, decodeImage, autoGain, rawRegionHalf, imageRegionCanvas } from './raw.js';
 import * as store from './store.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 const $ = id => document.getElementById(id);
-const app = $('app'), stage = $('stage'), canvas = $('view'), video = $('video');
+const app = $('app'), stage = $('stage'), video = $('video');
+let canvas = $('view');
 
 // ---------- Ayarlar ----------
 const SKEY = 'zimbohcam.settings.v1';
@@ -43,7 +44,7 @@ function activePreset() { return presets.find(p => p.id === activeId) || BUILTIN
 
 // ---------- Motor ----------
 let engine = null;
-try { engine = new FilmEngine(canvas); }
+try { engine = new FilmEngine(canvas); attachGL(canvas); }
 catch (e) {
   stage.innerHTML = `<div class="placeholder"><h2>Başlatılamadı</h2><p>${esc(e.message)}</p></div>`;
 }
@@ -150,8 +151,34 @@ $('fxBtn').onclick = () => {
   if (mode === 'edit') scheduleRender();
 };
 
+// ---------- Grafik bağlamı kaybı (bellek dolunca iPhone vizörü kapatabilir) ----------
+let glLostAt = 0;
+function attachGL(cv) {
+  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glLostAt = performance.now(); }, false);
+  cv.addEventListener('webglcontextrestored', () => { recoverGL(false); }, false);
+}
+function recoverGL(hard) {
+  try {
+    if (hard) {
+      const nc = canvas.cloneNode(false);
+      nc.width = canvas.width; nc.height = canvas.height;
+      canvas.replaceWith(nc);
+      canvas = nc;
+      engine = new FilmEngine(canvas);
+      attachGL(canvas);
+    } else {
+      engine._init();
+    }
+    glLostAt = 0;
+    if (ed) uploadEditPreview(ed);
+    if (mode === 'camera') startLoop(); else scheduleRender();
+  } catch (e) {
+    if (!hard) recoverGL(true);
+  }
+}
+
 // ---------- Kamera ----------
-let loopOn = false, camFrame = 0, capturing = false;
+let loopGen = 0, camFrame = 0, capturing = false, lastFrameTs = 0;
 
 async function startCamera() {
   if (!engine) return;
@@ -168,7 +195,7 @@ async function startCamera() {
     canvas.style.transform = cam.facingFront ? 'scaleX(-1)' : '';
     renderLenses();
     updateHud();
-    if (!loopOn) { loopOn = true; camLoop(); }
+    startLoop();
     if (!$('panel').hidden && panelTab === 'cam') renderPanel();
   } catch (e) {
     const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -184,24 +211,46 @@ function showCamMsg(msg, retry) {
 }
 $('camStartBtn').onclick = () => startCamera();
 
-function camLoop() {
-  if (mode !== 'camera' || !cam.stream) { loopOn = false; return; }
-  const v = video;
-  if (v.readyState >= 2 && v.videoWidth) {
-    const vw = v.videoWidth, vh = v.videoHeight;
-    const crop = cam.cropRect();
-    const cw = crop[2] * vw, ch = crop[3] * vh;
-    fitCanvas(cw / ch, cw, ch);
-    engine.uploadDisplay(v);
-    engine.render({
-      src: { tex: engine.srcTex, linear: false, rect: [0, 0, 1, 1] },
-      dst: crop, full: [vw, vh], grainRef: Math.min(cw, ch),
-      outW: canvas.width, outH: canvas.height, u: U, fx, seed: ++camFrame, flipY: true, imgRect: crop,
-    });
-  }
-  if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(camLoop);
-  else requestAnimationFrame(camLoop);
+function startLoop() {
+  const g = ++loopGen;
+  lastFrameTs = performance.now();
+  const step = () => {
+    if (g !== loopGen) return;
+    if (mode !== 'camera' || !cam.stream) return;
+    const v = video;
+    try {
+      if (v.readyState >= 2 && v.videoWidth && !engine.isLost()) {
+        const vw = v.videoWidth, vh = v.videoHeight;
+        const crop = cam.cropRect();
+        const cw = crop[2] * vw, ch = crop[3] * vh;
+        fitCanvas(cw / ch, cw, ch);
+        engine.uploadDisplay(v);
+        engine.render({
+          src: { tex: engine.srcTex, linear: false, rect: [0, 0, 1, 1] },
+          dst: crop, full: [vw, vh], grainRef: Math.min(cw, ch),
+          outW: canvas.width, outH: canvas.height, u: U, fx, seed: ++camFrame, flipY: true, imgRect: crop,
+        });
+        lastFrameTs = performance.now();
+      }
+    } catch {}
+    if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(step);
+    else requestAnimationFrame(step);
+  };
+  step();
 }
+
+// Bekçi: vizör donarsa ya da grafik bağlamı geri gelmezse kendini toparla
+setInterval(() => {
+  if (document.hidden || !engine) return;
+  const now = performance.now();
+  if (glLostAt && now - glLostAt > 1500) { recoverGL(true); return; }
+  if (mode !== 'camera' || capturing || !cam.stream) return;
+  if (cam.track && cam.track.readyState === 'ended') { startCamera(); return; }
+  if (now - lastFrameTs > 1500) {
+    video.play().catch(() => {});
+    startLoop();
+  }
+}, 1000);
 
 const LENS_LABEL = { '13': '13', '24': '24', '48': '48', '120': '120', front: 'Ön' };
 function renderLenses() {
@@ -254,21 +303,27 @@ async function capture() {
     const x2 = c2.getContext('2d');
     if (mirror) { x2.translate(cw, 0); x2.scale(-1, 1); }
     x2.drawImage(v, cx, cy, cw, ch, 0, 0, cw, ch);
-    // işlenmiş kare
-    engine.uploadDisplay(c2);
+    // işlenmiş kare (ayrı doku: vizör aynı anda kendi dokusunu güncelleyebilir)
+    const capTex = engine.createTexture();
+    engine.uploadDisplay(c2, capTex);
     const t = engine.makeTarget(cw, ch);
     engine.render({
-      src: { tex: engine.srcTex, linear: false, rect: [0, 0, 1, 1] },
+      src: { tex: capTex, linear: false, rect: [0, 0, 1, 1] },
       dst: [0, 0, 1, 1], full: [cw, ch], grainRef: Math.min(cw, ch),
       outW: cw, outH: ch, target: t, u: U, fx, seed: (Math.random() * 1e9) | 0, flipY: false,
     });
-    const px = engine.readTarget(t);
+    let px = engine.readTarget(t);
     engine.freeTarget(t);
+    engine.deleteTexture(capTex);
+    if (engine.isLost()) throw new Error('Grafik belleği doldu, tekrar dene (Ayarlar → Akış çözünürlüğü: 4K veya HD yardımcı olur)');
+    const q = settings.jpegQ / 100;
+    // belleği erken boşalt: önce orijinali kodla ve bırak
+    const orig = await canvasToBlob(c2, q);
+    freeCanvas(c2); c2 = null;
     c1 = document.createElement('canvas'); c1.width = cw; c1.height = ch;
     c1.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), cw, ch), 0, 0);
-    const q = settings.jpegQ / 100;
+    px = null;
     const blob = await canvasToBlob(c1, q);
-    const orig = await canvasToBlob(c2, q);
     if (!blob) throw new Error('JPEG oluşturulamadı');
     // küçük resim
     c3 = document.createElement('canvas');
@@ -440,6 +495,14 @@ async function openFile(file, expectRaw = false) {
   }
 }
 
+function uploadEditPreview(e) {
+  const { src, pw, ph } = e;
+  e.prevTex = engine.createTexture();
+  if (src.kind === 'raw') engine.uploadHalfRGB(rawRegionHalf(src, 0, 0, src.w, src.h, pw, ph), pw, ph, e.prevTex);
+  else engine.uploadDisplay(imageRegionCanvas(src, 0, 0, src.w, src.h, pw, ph), e.prevTex);
+  e.regionTex = null; e.regionKey = '';
+}
+
 function loadEditSource(src, name) {
   if (ed) {
     engine.deleteTexture(ed.prevTex);
@@ -449,10 +512,8 @@ function loadEditSource(src, name) {
   const maxP = Math.min(2560, engine.maxTex);
   const s = Math.min(1, maxP / Math.max(src.w, src.h));
   const pw = Math.max(1, Math.round(src.w * s)), ph = Math.max(1, Math.round(src.h * s));
-  const prevTex = engine.createTexture();
-  if (src.kind === 'raw') engine.uploadHalfRGB(rawRegionHalf(src, 0, 0, src.w, src.h, pw, ph), pw, ph, prevTex);
-  else engine.uploadDisplay(imageRegionCanvas(src, 0, 0, src.w, src.h, pw, ph), prevTex);
-  ed = { src, prevTex, pw, ph, zoom: false, cx: src.w / 2, cy: src.h / 2, regionTex: null, regionKey: '', name: name || 'foto' };
+  ed = { src, prevTex: null, pw, ph, zoom: false, cx: src.w / 2, cy: src.h / 2, regionTex: null, regionKey: '', name: name || 'foto' };
+  uploadEditPreview(ed);
   $('editEmpty').hidden = true;
   canvas.style.visibility = 'visible';
   setZoom(false);
