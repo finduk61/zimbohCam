@@ -9,7 +9,7 @@ import { Camera, NUMERIC_CAPS, MODE_CAPS } from './camera.js';
 import { isRawFile, decodeRaw, decodeImage, autoGain, rawRegionHalf, imageRegionCanvas } from './raw.js';
 import * as store from './store.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const $ = id => document.getElementById(id);
 const app = $('app'), stage = $('stage'), canvas = $('view'), video = $('video');
 

@@ -80,6 +80,7 @@ export const CATEGORIES = [
   { id: 'neg', label: 'Renkli negatif' },
   { id: 'slide', label: 'Slayt' },
   { id: 'bw', label: 'Siyah-beyaz' },
+  { id: 'instant', label: 'Anlık film' },
   { id: 'exp', label: 'Deneysel' },
 ];
 
@@ -251,10 +252,43 @@ export const BUILTIN_PRESETS = [
     grainAmt: 28, grainSize: 40, grainColor: 20,
     hsl_yellow_s: 20, hsl_blue_h: -15,
   }),
-  B('b-polaroid', 'Polaroid 600', 'exp', {
+  B('b-polaroid', 'Polaroid 600', 'instant', {
     exposure: 0.25, contrast: -20, highlights: -26, shadows: 12, whites: -14, blacks: 20, vignette: 34,
     temp: 8, tint: 6, saturation: -18, shadowHue: 190, shadowAmt: 18, highHue: 45, highAmt: 20,
     grainAmt: 20, grainSize: 40, grainColor: 10,
+    bloomAmt: 14,
+  }),
+  B('b-sx70', 'Polaroid SX-70', 'instant', {
+    exposure: 0.2, contrast: -30, highlights: -30, shadows: 14, whites: -16, blacks: 22, vignette: 30,
+    temp: 34, tint: 2, saturation: -18, shadowHue: 35, shadowAmt: 18, highHue: 45, highAmt: 30,
+    grainAmt: 18, grainSize: 40, grainColor: 8,
+    bloomAmt: 18, bloomRadius: 60,
+    hsl_blue_s: -30, hsl_green_s: -25, hsl_green_h: -10,
+  }),
+  B('b-itype', 'Polaroid i-Type', 'instant', {
+    exposure: 0.1, contrast: -4, highlights: -16, shadows: 6, whites: -8, blacks: 12, vignette: 22,
+    temp: -4, saturation: -6, shadowHue: 200, shadowAmt: 16, highHue: 50, highAmt: 10,
+    grainAmt: 16, grainSize: 36, grainColor: 8,
+    bloomAmt: 8,
+  }),
+  B('b-expired', 'Süresi geçmiş Polaroid', 'instant', {
+    exposure: 0.3, contrast: -26, highlights: -34, whites: -20, blacks: 26, vignette: 40,
+    temp: -10, tint: 26, saturation: -28, shadowHue: 185, shadowAmt: 40, highHue: 330, highAmt: 30,
+    grainAmt: 30, grainSize: 48, grainColor: 30,
+    bloomAmt: 16,
+    hsl_green_h: 20, hsl_yellow_h: -15,
+  }),
+  B('b-instax', 'Instax Mini', 'instant', {
+    exposure: 0.15, contrast: 12, highlights: -12, whites: 2, blacks: 6, vignette: 12,
+    temp: -12, tint: -4, saturation: 14, shadowHue: 210, shadowAmt: 10, highHue: 60, highAmt: 4,
+    grainAmt: 10, grainSize: 28, grainColor: 6,
+    bloomAmt: 6,
+    hsl_blue_s: 10,
+  }),
+  B('b-polabw', 'Polaroid B&W', 'instant', {
+    exposure: 0.15, contrast: -10, highlights: -22, shadows: 10, whites: -12, blacks: 22, vignette: 30,
+    mono: 1, shadowHue: 30, shadowAmt: 8, highHue: 40, highAmt: 10,
+    grainAmt: 16, grainSize: 40,
     bloomAmt: 14,
   }),
 ];
